@@ -32,7 +32,7 @@ const PROJECTS = [
     title: "Content Portfolio",
     category: "Strategic Consulting",
     description: "Achieved 13% sales growth and 42% increase in qualified leads within 3 months of taking on strategic leadership.",
-    image: "/Creativa%20coffee/Creativa%20Cafe-01.png",
+    image: "/contentport.jpg",
     tags: ["Views", "Reach", "Storytelling"],
     path: "/content"
   },
