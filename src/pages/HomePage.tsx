@@ -109,6 +109,8 @@ export default function HomePage({ scrollTo }: { scrollTo: (id: string) => void 
                 alt="Ritwik Yadav Portrait" 
                 className="w-full h-full object-cover transition-all duration-700"
                 referrerPolicy="no-referrer"
+                loading="eager"
+                fetchPriority="high"
               />
             </div>
             {/* Decorative elements */}
@@ -199,6 +201,7 @@ export default function HomePage({ scrollTo }: { scrollTo: (id: string) => void 
                     alt="Strategic Planning" 
                     className="rounded-2xl w-full aspect-square object-cover"
                     referrerPolicy="no-referrer"
+                    loading="lazy"
                   />
                   <Link 
                     to="/seo"
@@ -229,6 +232,7 @@ export default function HomePage({ scrollTo }: { scrollTo: (id: string) => void 
                     alt="Data Driven Marketing" 
                     className="rounded-2xl w-full aspect-square object-cover"
                     referrerPolicy="no-referrer"
+                    loading="lazy"
                   />
                 </div>
               </div>
@@ -266,6 +270,7 @@ export default function HomePage({ scrollTo }: { scrollTo: (id: string) => void 
                       alt={project.title} 
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100"
                       referrerPolicy="no-referrer"
+                      loading="lazy"
                     />
                     <div className="absolute inset-0 bg-brand-onyx/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center">
                       <div className="w-16 h-16 bg-brand-parchment rounded-full flex items-center justify-center text-brand-onyx shadow-xl">

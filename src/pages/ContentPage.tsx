@@ -1,12 +1,9 @@
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useInView } from 'motion/react';
 import { Edit3, Users, Share2, BookOpen, ArrowRight, Volume2, VolumeX, Play, Pause, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 // Sample video data - using reliable sample MP4 links for the carousel
-// Note: Instagram Reel links cannot be played directly in a <video> tag.
-// These sample videos demonstrate the carousel effect, while the "Go to Reel" 
-// button links to the actual Instagram content.
 const REELS_DATA = [
   {
     id: 1,
@@ -72,71 +69,37 @@ const REELS_DATA = [
 function ReelsCarousel() {
   const containerRef = useRef(null);
   const isSectionInView = useInView(containerRef, { amount: 0.3 });
-  const N = REELS_DATA.length;
-  const INFINITE_DATA = [...REELS_DATA, ...REELS_DATA, ...REELS_DATA];
-  const [activeIndex, setActiveIndex] = useState(N + 2);
+  const [activeIndex, setActiveIndex] = useState(2);
   const [hasInteracted, setHasInteracted] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const ITEM_WIDTH = 280 + 64; // 280px width + 64px gap (gap-16)
 
-  const handleScroll = () => {
-    if (!scrollRef.current) return;
-    const { scrollLeft, offsetWidth } = scrollRef.current;
-    
-    const centerOffset = scrollLeft + (offsetWidth / 2);
-    const index = Math.round((centerOffset - (offsetWidth / 2)) / ITEM_WIDTH);
-    
-    if (index !== activeIndex && index >= 0 && index < INFINITE_DATA.length) {
-      setActiveIndex(index);
-    }
-
-    // Infinite loop jump logic
-    // If we scroll too far left, jump to the middle set
-    if (scrollLeft < (N * ITEM_WIDTH) / 2) {
-      scrollRef.current.scrollLeft += N * ITEM_WIDTH;
-    } 
-    // If we scroll too far right, jump to the middle set
-    else if (scrollLeft > (N * 1.5) * ITEM_WIDTH) {
-      scrollRef.current.scrollLeft -= N * ITEM_WIDTH;
-    }
-  };
-
-  const scrollToReel = (index: number) => {
-    if (!scrollRef.current) return;
-    const targetScroll = (index * ITEM_WIDTH);
-    
-    scrollRef.current.scrollTo({
-      left: targetScroll,
-      behavior: 'smooth'
-    });
-    setActiveIndex(index);
+  const nextReel = () => {
+    setActiveIndex((prev) => (prev + 1) % REELS_DATA.length);
     setHasInteracted(true);
   };
 
-  const nextReel = () => {
-    scrollToReel(activeIndex + 1);
-  };
-
   const prevReel = () => {
-    scrollToReel(activeIndex - 1);
+    setActiveIndex((prev) => (prev - 1 + REELS_DATA.length) % REELS_DATA.length);
+    setHasInteracted(true);
   };
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (scrollRef.current) {
-        const initialScroll = ((N + 2) * ITEM_WIDTH);
-        scrollRef.current.scrollLeft = initialScroll;
-      }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [ITEM_WIDTH, N]);
+  // Determine which reels to show: active, prev, next (for smooth transitions)
+  const getVisibleIndices = () => {
+    const N = REELS_DATA.length;
+    const prev2 = (activeIndex - 2 + N) % N;
+    const prev1 = (activeIndex - 1 + N) % N;
+    const next1 = (activeIndex + 1) % N;
+    const next2 = (activeIndex + 2) % N;
+    return [prev2, prev1, activeIndex, next1, next2];
+  };
+
+  const visibleIndices = getVisibleIndices();
 
   return (
     <div ref={containerRef} className="mb-8 relative group min-h-[700px] flex items-center overflow-hidden">
       {/* Static Phone Frame Overlay */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[304px] h-[524px] z-20 pointer-events-none">
         <div className="absolute inset-0 border-[12px] border-brand-onyx rounded-[3.5rem] shadow-[0_0_50px_rgba(0,0,0,0.3),inset_0_0_0_1px_rgba(255,255,255,0.1)] bg-transparent">
-          {/* Inner Seam Mask - ensures no gaps between video and frame */}
+          {/* Inner Seam Mask */}
           <div className="absolute inset-[-1px] rounded-[2.75rem] shadow-[inset_0_0_0_3px_#141414] z-10" />
           
           {/* Dynamic Island */}
@@ -167,22 +130,49 @@ function ReelsCarousel() {
         <ChevronRight className="w-6 h-6" />
       </button>
 
-      <div 
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="w-full flex gap-16 overflow-x-auto py-10 px-[calc(50%-140px)] snap-x snap-mandatory cursor-grab active:cursor-grabbing no-scrollbar"
-      >
-        {INFINITE_DATA.map((reel, index) => (
-          <ReelItem 
-            key={index} 
-            reel={reel} 
-            isActive={index === activeIndex} 
-            hasInteracted={hasInteracted}
-            isSectionInView={isSectionInView}
-            onSelect={() => scrollToReel(index)}
-            onInteraction={() => setHasInteracted(true)}
-          />
-        ))}
+      {/* Carousel Items - CSS-positioned, no scrolling */}
+      <div className="relative w-full h-[600px] flex items-center justify-center">
+        <AnimatePresence mode="popLayout">
+          {visibleIndices.map((reelIndex, posIndex) => {
+            const position = posIndex - 2; // -2, -1, 0, 1, 2
+            const isActive = position === 0;
+            const xOffset = position * 340;
+            const scale = isActive ? 1 : 0.8;
+            const zIndex = isActive ? 10 : 5 - Math.abs(position);
+            const opacity = Math.abs(position) <= 1 ? 1 : 0.5;
+
+            return (
+              <motion.div
+                key={`reel-${reelIndex}-${position}`}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ 
+                  opacity,
+                  scale,
+                  x: xOffset,
+                  zIndex,
+                }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                className="absolute flex-shrink-0 w-[280px] h-[500px] cursor-pointer"
+                onClick={() => {
+                  if (!isActive) {
+                    setActiveIndex(reelIndex);
+                    setHasInteracted(true);
+                  }
+                }}
+                style={{ zIndex }}
+              >
+                <ReelItem 
+                  reel={REELS_DATA[reelIndex]} 
+                  isActive={isActive}
+                  hasInteracted={hasInteracted}
+                  isSectionInView={isSectionInView}
+                  onInteraction={() => setHasInteracted(true)}
+                />
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
 
       {!hasInteracted && (
@@ -200,7 +190,7 @@ function ReelsCarousel() {
   );
 }
 
-function ReelItem({ reel, isActive, hasInteracted, isSectionInView, onSelect, onInteraction }: { reel: any, isActive: boolean, hasInteracted: boolean, isSectionInView: boolean, onSelect: () => void, onInteraction: () => void, key?: any }) {
+function ReelItem({ reel, isActive, hasInteracted, isSectionInView, onInteraction }: { reel: typeof REELS_DATA[0], isActive: boolean, hasInteracted: boolean, isSectionInView: boolean, onInteraction: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
@@ -209,24 +199,38 @@ function ReelItem({ reel, isActive, hasInteracted, isSectionInView, onSelect, on
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 
+  // Only load video source when active or adjacent (within 1 position)
+  const shouldLoadVideo = isActive;
+
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isActive || !hasInteracted || isLocalMuted || !isSectionInView;
-      
-      if (isActive && isSectionInView) {
-        if (isPlaying) {
-          videoRef.current.play().catch((err) => {
-            console.warn("Playback failed:", err);
+    const video = videoRef.current;
+    if (!video) return;
+
+    // On mobile, videos MUST be muted to autoplay. 
+    // We only unmute if user has interacted AND the reel is active AND not locally muted.
+    const shouldBeMuted = !isActive || !hasInteracted || isLocalMuted || !isSectionInView;
+    video.muted = shouldBeMuted;
+    
+    if (isActive && isSectionInView && shouldLoadVideo) {
+      if (isPlaying) {
+        // Always try playing muted first on mobile, then unmute if allowed
+        const playPromise = video.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {
+            // If play fails (e.g., mobile autoplay policy), try muted
+            video.muted = true;
+            video.play().catch((err) => {
+              console.warn("Playback failed even muted:", err);
+            });
           });
-        } else {
-          videoRef.current.pause();
         }
       } else {
-        // Pause non-active or out-of-view videos to save resources
-        videoRef.current.pause();
+        video.pause();
       }
+    } else {
+      video.pause();
     }
-  }, [isActive, hasInteracted, isPlaying, isLocalMuted, isSectionInView]);
+  }, [isActive, hasInteracted, isPlaying, isLocalMuted, isSectionInView, shouldLoadVideo]);
 
   const togglePlay = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -251,7 +255,7 @@ function ReelItem({ reel, isActive, hasInteracted, isSectionInView, onSelect, on
   const handleError = () => {
     console.error("Video failed to load:", reel.videoUrl);
     setHasError(true);
-    setIsLoaded(true); // Stop showing the spinner
+    setIsLoaded(true);
   };
 
   const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -269,103 +273,106 @@ function ReelItem({ reel, isActive, hasInteracted, isSectionInView, onSelect, on
   };
 
   return (
-    <motion.div 
-      onClick={onSelect}
-      animate={{ 
-        scale: isActive ? 1 : 0.8,
-        opacity: 1,
-        zIndex: isActive ? 10 : 1,
-      }}
-      transition={{ type: "spring", stiffness: 200, damping: 25 }}
-      className="relative flex-shrink-0 w-[280px] h-[500px] snap-center cursor-pointer"
-    >
-      <div className="w-full h-full rounded-[2.75rem] overflow-hidden bg-brand-khaki relative flex items-center justify-center">
-        <span className="absolute top-10 left-1/2 -translate-x-1/2 text-white/20 font-bold text-6xl z-0">{reel.id}</span>
-        
-        {hasError ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-brand-onyx/80 p-6 text-center z-20">
-            <VolumeX className="w-12 h-12 text-brand-khaki mb-4" />
-            <p className="text-white text-sm font-serif mb-2">Video Unavailable</p>
-            <p className="text-white/60 text-[10px] leading-relaxed">
-              Google Drive links often fail to stream directly. Please use a direct .mp4 link from a host like Cloudinary or Dropbox.
-            </p>
-          </div>
-        ) : (
-          <video 
-            ref={videoRef}
-            src={reel.videoUrl}
-            loop
-            playsInline
-            autoPlay
-            preload="auto"
-            muted={!isActive || !hasInteracted || isLocalMuted || !isSectionInView}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onError={handleError}
-            onCanPlay={() => setIsLoaded(true)}
-            className="w-full h-full object-cover relative z-10"
-          />
-        )}
-        
-        {!isLoaded && !hasError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-brand-onyx/20 backdrop-blur-sm z-20">
-            <div className="w-8 h-8 border-4 border-brand-khaki border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
-        
-        {/* Content Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-6 flex flex-col justify-end">
-          <div className="mb-4">
-            <h3 className="text-white font-serif text-xl mb-1">{reel.title}</h3>
-            <p className="text-white/70 text-[10px] uppercase tracking-widest font-bold">{reel.description}</p>
-          </div>
-
-          {/* Video Controls for Active Reel */}
-          {isActive && hasInteracted && (
-            <div className="flex flex-col gap-4 z-30" onClick={(e) => e.stopPropagation()}>
-              {/* Progress Bar */}
-              <input 
-                type="range"
-                min="0"
-                max={duration}
-                step="0.1"
-                value={currentTime}
-                onChange={handleProgressChange}
-                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-brand-khaki"
-              />
-              
-              <div className="flex items-center justify-between text-white">
-                <div className="flex items-center gap-4">
-                  <button onClick={togglePlay} className="hover:text-brand-khaki transition-colors">
-                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                  </button>
-                  <button onClick={toggleMute} className="hover:text-brand-khaki transition-colors">
-                    {isLocalMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-                  </button>
-                </div>
-                
-                <a 
-                  href={reel.originalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-white/20 transition-all border border-white/10"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Go to Reel
-                </a>
-              </div>
-            </div>
+    <div className="w-full h-full rounded-[2.75rem] overflow-hidden bg-brand-khaki relative flex items-center justify-center">
+      <span className="absolute top-10 left-1/2 -translate-x-1/2 text-white/20 font-bold text-6xl z-0">{reel.id}</span>
+      
+      {hasError ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-brand-onyx/80 p-6 text-center z-20">
+          <VolumeX className="w-12 h-12 text-brand-khaki mb-4" />
+          <p className="text-white text-sm font-serif mb-2">Video Unavailable</p>
+          <p className="text-white/60 text-[10px] leading-relaxed">
+            This video could not be loaded. Please check the link or try again later.
+          </p>
+          {reel.originalUrl && (
+            <a 
+              href={reel.originalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 flex items-center gap-2 px-4 py-2 bg-brand-khaki/20 rounded-full text-white text-xs font-bold uppercase tracking-widest hover:bg-brand-khaki/40 transition-all"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Watch on Instagram
+            </a>
           )}
         </div>
+      ) : shouldLoadVideo ? (
+        <video 
+          ref={videoRef}
+          src={reel.videoUrl}
+          loop
+          playsInline
+          muted
+          preload="auto"
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onError={handleError}
+          onCanPlay={() => setIsLoaded(true)}
+          className="w-full h-full object-cover relative z-10"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-brand-onyx/40 z-10">
+          <Play className="w-12 h-12 text-white/40" />
+        </div>
+      )}
+      
+      {shouldLoadVideo && !isLoaded && !hasError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-brand-onyx/20 backdrop-blur-sm z-20">
+          <div className="w-8 h-8 border-4 border-brand-khaki border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+      
+      {/* Content Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-6 flex flex-col justify-end z-10">
+        <div className="mb-4">
+          <h3 className="text-white font-serif text-xl mb-1">{reel.title}</h3>
+          <p className="text-white/70 text-[10px] uppercase tracking-widest font-bold">{reel.description}</p>
+        </div>
 
-        {/* Muted Indicator for Adjacent Reels */}
-        {!isActive && (
-          <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm p-2 rounded-full text-white/60">
-            <VolumeX className="w-4 h-4" />
+        {/* Video Controls for Active Reel */}
+        {isActive && hasInteracted && shouldLoadVideo && (
+          <div className="flex flex-col gap-4 z-30" onClick={(e) => e.stopPropagation()}>
+            {/* Progress Bar */}
+            <input 
+              type="range"
+              min="0"
+              max={duration}
+              step="0.1"
+              value={currentTime}
+              onChange={handleProgressChange}
+              className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-brand-khaki"
+            />
+            
+            <div className="flex items-center justify-between text-white">
+              <div className="flex items-center gap-4">
+                <button onClick={togglePlay} className="hover:text-brand-khaki transition-colors">
+                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                </button>
+                <button onClick={toggleMute} className="hover:text-brand-khaki transition-colors">
+                  {isLocalMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                </button>
+              </div>
+              
+              <a 
+                href={reel.originalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-white/20 transition-all border border-white/10"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Go to Reel
+              </a>
+            </div>
           </div>
         )}
       </div>
-    </motion.div>
+
+      {/* Muted Indicator for Adjacent Reels */}
+      {!isActive && (
+        <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-sm p-2 rounded-full text-white/60 z-20">
+          <VolumeX className="w-4 h-4" />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -402,7 +409,7 @@ export default function ContentPage() {
                 Creativa Coffee is a design project that I conceptualized and brought to life from the ground up. Every element of this brand, from the inception of the name and tagline to the creation of its visual identity, reflects a meticulous creative process. I crafted the color palette, designed the logo, and developed the overall aesthetic, ensuring that every detail aligned with the brand's essence.
               </p>
               <p className="text-lg text-brand-onyx/70 leading-relaxed">
-                This project allowed me to fully leverage my skills in Adobe Photoshop and Illustrator, bringing together strategy, creativity, and technical expertise. Creativa Coffee is more than a design—it’s a testament to my ability to transform an idea into a cohesive and compelling brand identity.
+                This project allowed me to fully leverage my skills in Adobe Photoshop and Illustrator, bringing together strategy, creativity, and technical expertise. Creativa Coffee is more than a design—it's a testament to my ability to transform an idea into a cohesive and compelling brand identity.
               </p>
             </div>
 
@@ -413,24 +420,28 @@ export default function ContentPage() {
                   alt="Creativa Cafe Logo Idea 1" 
                   className="rounded-2xl w-full aspect-square object-contain bg-white/50 shadow-md"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
                 />
                 <img 
                   src="/Creativa%20coffee/Logo-idea.jpeg" 
                   alt="Creativa Cafe Logo Idea 2" 
                   className="rounded-2xl w-full aspect-square object-contain bg-white/50 shadow-md"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
                 />
                 <img 
                   src="/Creativa%20coffee/Coffee_Bag_v02.jpg" 
                   alt="Creativa Cafe Coffee Bag" 
                   className="rounded-2xl w-full aspect-square object-contain bg-white/50 shadow-md"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
                 />
                 <img 
                   src="/Creativa%20coffee/board.png" 
                   alt="Creativa Cafe Board" 
                   className="rounded-2xl w-full aspect-square object-contain bg-white/50 shadow-md"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
                 />
               </div>
               <div className="pt-4">
@@ -451,6 +462,7 @@ export default function ContentPage() {
                         alt={`Brand Kit ${i + 1}`} 
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
+                        loading="lazy"
                       />
                     </div>
                   ))}
@@ -498,13 +510,13 @@ export default function ContentPage() {
           <div className="relative z-10 max-w-4xl">
             <h2 className="text-4xl md:text-5xl font-serif mb-6">The Content Authority Loop</h2>
             <p className="text-xl text-brand-parchment/70 mb-12 leading-relaxed">
-              My strategy doesn't just end with a published post. By creating High-Equity Assets that earn backlinks, we increase the overall Domain Authority, which makes the next Topic Cluster rank faster and with less effort. It’s a self-sustaining cycle of organic growth.
+              My strategy doesn't just end with a published post. By creating High-Equity Assets that earn backlinks, we increase the overall Domain Authority, which makes the next Topic Cluster rank faster and with less effort. It's a self-sustaining cycle of organic growth.
             </p>
             <ul className="space-y-8">
               {[
                 {
                   title: "Pillar Architecture",
-                  desc: "Mapping comprehensive topic silos to capture 100% of a niche’s search footprint."
+                  desc: "Mapping comprehensive topic silos to capture 100% of a niche's search footprint."
                 },
                 {
                   title: "Intent Engineering",
